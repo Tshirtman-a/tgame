@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title></title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  body {
+    margin: 0;
+    background: #001100;
+    color: #00FF00;
+    font-family: 'Press Start 2P', monospace;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    margin: 30px auto 10px auto;
+    background: #002200;
+    border: 4px solid #00FF00;
+    image-rendering: pixelated;
+  }
+
+  #score {
+    text-align: right;
+    width: 320px;
+    margin: 0 auto 0 auto;
+    font-size: 14px;
+    letter-spacing: 2px;
+  }
+
+  #message {
+    text-align: center;
+    font-size: 16px;
+    margin: 10px auto 5px auto;
+    height: 18px;
+    color: #33FF33;
+  }
+
+  button {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    background: transparent;
+    border: 2px solid #00FF00;
+    color: #00FF00;
+    padding: 6px 10px;
+    margin: 5px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  button:hover {
+    background: #005500;
+  }
+
+  #startBtn, #restartBtn {
+    display: block;
+    margin: 0 auto 10px auto;
+    width: 160px;
+  }
+
+  #controls {
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 20px auto;
+    position: relative;
+    touch-action: manipulation;
+  }
+
+  .btn-dir {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: #004400;
+    border: 3px solid #00FF00;
+    border-radius: 8px;
+    box-shadow:
+      inset 0 4px 0 #00CC00,
+      0 4px 0 #006600;
+    color: #00FF00;
+    font-size: 24px;
+    line-height: 44px;
+    text-align: center;
+    user-select: none;
+  }
+  .btn-dir:active {
+    background: #00AA00;
+    box-shadow:
+      inset 0 2px 0 #009900,
+      0 1px 0 #004400;
+  }
+
+  #btn-up {
+    top: 0;
+    left: 65px;
+    border-radius: 8px 8px 0 0;
+  }
+  #btn-down {
+    bottom: 0;
+    left: 65px;
+    border-radius: 0 0 8px 8px;
+  }
+  #btn-left {
+    top: 65px;
+    left: 0;
+    border-radius: 8px 0 0 8px;
+  }
+  #btn-right {
+    top: 65px;
+    right: 0;
+    border-radius: 0 8px 8px 0;
+  }
+
+  #menuBtn {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 32px;
+    cursor: pointer;
+    z-index: 20;
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+  #menuBtn div {
+    width: 28px;
+    height: 4px;
+    background: #00FF00;
+    margin: 4px auto;
+    border-radius: 2px;
+    box-shadow: none;
+  }
+
+  #menuContent {
+    position: fixed;
+    top: 52px;
+    right: 12px;
+    background: rgba(0, 50, 0, 0.95);
+    border: 2px solid #00FF00;
+    border-radius: 6px;
+    padding: 10px 16px;
+    display: none;
+    font-size: 13px;
+    width: 200px;
+    z-index: 19;
+  }
+  #menuContent a {
+    color: #33FF33;
+    text-decoration: none;
+    font-weight: 700;
+    font-family: 'Press Start 2P', monospace;
+    user-select: none;
+  }
+  #menuContent a:hover {
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="320" height="224"></canvas>
+<div id="score">SCORE: 0</div>
+<div id="message"></div>
+<button id="startBtn">START</button>
+<button id="restartBtn" style="display:none;">RESTART</button>
+
+<div id="controls">
+  <div id="btn-up" class="btn-dir" aria-label="上" role="button" tabindex="0">▲</div>
+  <div id="btn-down" class="btn-dir" aria-label="下" role="button" tabindex="0">▼</div>
+  <div id="btn-left" class="btn-dir" aria-label="左" role="button" tabindex="0">◀</div>
+  <div id="btn-right" class="btn-dir" aria-label="右" role="button" tabindex="0">▶</div>
+</div>
+
+<button id="menuBtn" aria-label="メニューを開く">
+  <div></div><div></div><div></div>
+</button>
+<div id="menuContent">
+  <a href="https://www.youtube.com/shorts/LZvqEaO55TM" target="_blank" rel="noopener noreferrer">Tシャツの販売中 (T-shirts for sale)</a>
+</div>
+
+<script>
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const scoreEl = document.getElementById('score');
+  const messageEl = document.getElementById('message');
+  const menuBtn = document.getElementById('menuBtn');
+  const menuContent = document.getElementById('menuContent');
+
+  const COLS = 10, ROWS = 7, SIZE = 32;
+  let snake, direction, apple, gameInterval, score = 0;
+  let directionChanged = false;
+
+  // 音声ファイルを鳴らす（重複対応）
+  function playSound(src) {
+    const sound = new Audio(src);
+    sound.play();
+  }
+
+  // 初期化処理
+  function init() {
+    snake = [{x: 4, y: 3}, {x:3,y:3}, {x:2,y:3}, {x:1,y:3}];
+    direction = 'right';
+    score = 0;
+    updateScore();
+    spawnApple();
+    messageEl.textContent = '';
+    restartBtn.style.display = 'none';
+    directionChanged = false;
+    draw();
+  }
+
+  function updateScore() {
+    scoreEl.textContent = 'SCORE: ' + score;
+  }
+
+  // リンゴ生成（蛇と重ならない場所）
+  function spawnApple() {
+    let valid = false;
+    while (!valid) {
+      apple = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)};
+      valid = !snake.some(s => s.x === apple.x && s.y === apple.y);
+    }
+  }
+
+  // 描画処理
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 蛇の描画
+    ctx.fillStyle = '#00FF00';
+    for (let s of snake) {
+      ctx.fillRect(s.x * SIZE, s.y * SIZE, SIZE, SIZE);
+    }
+
+    // リンゴ描画
+    ctx.fillStyle = '#FFFF00';
+    ctx.beginPath();
+    ctx.arc(apple.x * SIZE + SIZE/2, apple.y * SIZE + SIZE/2, SIZE/2 - 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ゲームオーバー
+  function gameOver() {
+    clearInterval(gameInterval);
+    messageEl.textContent = 'Game over';
+    restartBtn.style.display = 'block';
+    playSound('死亡.mp3');
+  }
+
+  // ゲームクリア判定（全マス使用）
+  function checkClear() {
+    if (snake.length === COLS * ROWS) {
+      clearInterval(gameInterval);
+      messageEl.textContent = 'クリア！おめでとう！';
+      restartBtn.style.display = 'block';
+      playSound('クリア.mp3');
+    }
+  }
+
+  // 1ステップ進める
+  function step() {
+    if (directionChanged) directionChanged = false;
+
+    let head = {...snake[0]};
+
+    switch(direction) {
+      case 'up': head.y--; break;
+      case 'down': head.y++; break;
+      case 'left': head.x--; break;
+      case 'right': head.x++; break;
+    }
+
+    // 壁にぶつかったらゲームオーバー
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+      gameOver();
+      return;
+    }
+
+    // 自分の体にぶつかったらゲームオーバー
+    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+
+    // リンゴを食べたらスコア加算・音鳴らし、リンゴ再生成
+    if (head.x === apple.x && head.y === apple.y) {
+      score++;
+      updateScore();
+      playSound('効果音１.mp3');
+      spawnApple();
+      checkClear();
+    } else {
+      snake.pop();
+    }
+
+    draw();
+  }
+
+  // キー操作
+  window.addEventListener('keydown', (e) => {
+    if (directionChanged) return;
+    switch(e.key) {
+      case 'ArrowUp':
+      case 'w':
+      case 'W':
+        if (direction !== 'down') {
+          direction = 'up';
+          directionChanged = true;
+        }
+        break;
+      case 'ArrowDown':
+      case 's':
+      case 'S':
+        if (direction !== 'up') {
+          direction = 'down';
+          directionChanged = true;
+        }
+        break;
+      case 'ArrowLeft':
+      case 'a':
+      case 'A':
+        if (direction !== 'right') {
+          direction = 'left';
+          directionChanged = true;
+        }
+        break;
+      case 'ArrowRight':
+      case 'd':
+      case 'D':
+        if (direction !== 'left') {
+          direction = 'right';
+          directionChanged = true;
+        }
+        break;
+    }
+  });
+
+  // スタートボタン処理　速度
+  startBtn.onclick = () => {
+    init();
+    startBtn.style.display = 'none';
+    restartBtn.style.display = 'none';
+    playSound('効果音２.mp3');
+    gameInterval = setInterval(step, 250);
+  };
+
+  // リスタートボタン処理　速度
+  restartBtn.onclick = () => {
+    init();
+    restartBtn.style.display = 'none';
+    playSound('効果音２.mp3');
+    gameInterval = setInterval(step, 250);
+  };
+
+  // コントローラーの押下処理
+  function setDirection(dir) {
+    if (directionChanged) return;
+    // 逆方向禁止
+    if ((direction === 'up' && dir === 'down') ||
+        (direction === 'down' && dir === 'up') ||
+        (direction === 'left' && dir === 'right') ||
+        (direction === 'right' && dir === 'left')) {
+      return;
+    }
+    direction = dir;
+    directionChanged = true;
+  }
+
+  // 方向ボタンのタッチ・クリック対応
+  ['up','down','left','right'].forEach(dir => {
+    const btn = document.getElementById('btn-' + dir);
+    btn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      setDirection(dir);
+    }, {passive:false});
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      setDirection(dir);
+    });
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      setDirection(dir);
+    });
+  });
+
+  // メニューボタン操作
+  menuBtn.onclick = () => {
+    if (menuContent.style.display === 'block') {
+      menuContent.style.display = 'none';
+      menuBtn.setAttribute('aria-label', 'メニューを開く');
+    } else {
+      menuContent.style.display = 'block';
+      menuBtn.setAttribute('aria-label', 'メニューを閉じる');
+    }
+  };
+
+  // 初期画面描画
+  init();
+</script>
+
+</body>
+</html>
